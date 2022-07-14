@@ -1,73 +1,77 @@
 #include <iostream>
-#include <sys/types.h>
+#include <fstream>
+#include <stdio.h>
 #include <unistd.h>
 #include <sys/socket.h>
-#include <netdb.h>
+#include <stdlib.h>
+#include <netinet/in.h>
 #include <arpa/inet.h>
-#include <string.h>
-#include <string>
 
 using namespace std;
 
-int main()
-{
-    //	Create a socket
-    int sock = socket(AF_INET, SOCK_STREAM, 0);
-    if (sock == -1)
-    {
-        return 1;
-    }
+class Client_socket{
+    fstream file;
 
-    //	Create a hint structure for the server we're connecting with
-    int port = 54000;
-    string ipAddress = "127.0.0.1";
+    int PORT;
+    
+    int general_socket_descriptor;
 
-    sockaddr_in hint;
-    hint.sin_family = AF_INET;
-    hint.sin_port = htons(port);
-    inet_pton(AF_INET, ipAddress.c_str(), &hint.sin_addr);
+    struct sockaddr_in address;
+    int address_length;
 
-    //	Connect to the server on the socket
-    int connectRes = connect(sock, (sockaddr*)&hint, sizeof(hint));
-    if (connectRes == -1)
-    {
-        return 1;
-    }
+    public:
+        Client_socket(){
+            create_socket();
+            PORT = 8050;
 
-    //	While loop:
-    char buf[4096];
-    string userInput;
+            address.sin_family = AF_INET;
+            address.sin_port = htons( PORT );
+            address_length = sizeof(address);
+            if(inet_pton(AF_INET, "127.0.0.1", &address.sin_addr)<=0) { 
+                cout<<"[ERROR] : Invalid address\n";
+            }
 
-
-    do {
-        //		Enter lines of text
-        cout << "> ";
-        getline(cin, userInput);
-
-        //		Send to server
-        int sendRes = send(sock, userInput.c_str(), userInput.size() + 1, 0);
-        if (sendRes == -1)
-        {
-            cout << "Could not send to server! Whoops!\r\n";
-            continue;
+            create_connection();
+            
+            file.open(".//Data//Client//client_text.txt", ios::out | ios::trunc | ios::binary);
+            if(file.is_open()){
+                cout<<"[LOG] : File Creted.\n";
+            }
+            else{
+                cout<<"[ERROR] : File creation failed, Exititng.\n";
+                exit(EXIT_FAILURE);
+            }
         }
 
-        //		Wait for response
-        memset(buf, 0, 4096);
-        int bytesReceived = recv(sock, buf, 4096, 0);
-        if (bytesReceived == -1)
-        {
-            cout << "There was an error getting response from server\r\n";
+        void create_socket(){
+            if ((general_socket_descriptor = socket(AF_INET, SOCK_STREAM, 0)) < 0) { 
+                perror("[ERROR] : Socket failed.\n");
+                exit(EXIT_FAILURE);
+            }
+            cout<<"[LOG] : Socket Created Successfully.\n";
         }
-        else
-        {
-            //		Display response
-            cout << "SERVER> " << string(buf, bytesReceived) << "\r\n";
+
+        void create_connection(){
+            if (connect(general_socket_descriptor, (struct sockaddr *)&address, sizeof(address)) < 0) { 
+                perror("[ERROR] : connection attempt failed.\n");
+                exit(EXIT_FAILURE);
+            }
+            cout<<"[LOG] : Connection Successfull.\n";
         }
-    } while(true);
 
-    //	Close the socket
-    close(sock);
+        void receive_file(){
+            char buffer[1024] = {};
+            int valread = read(general_socket_descriptor , buffer, 1024);
+            cout<<"[LOG] : Data received "<<valread<<" bytes\n";
+            cout<<"[LOG] : Saving data to file.\n";
+            
+            file<<buffer;
+            cout<<"[LOG] : File Saved.\n";
+        }
+};
 
+int main(){
+    Client_socket C;
+    C.receive_file();
     return 0;
 }
