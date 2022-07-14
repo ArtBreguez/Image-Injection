@@ -1,89 +1,96 @@
 #include <iostream>
-#include <sys/types.h>
+#include <fstream>
+#include <stdio.h>
 #include <unistd.h>
 #include <sys/socket.h>
-#include <netdb.h>
+#include <stdlib.h>
+#include <netinet/in.h>
 #include <arpa/inet.h>
-#include <string.h>
-#include <string>
- 
+
 using namespace std;
- 
-int main()
-{
-    // Create a socket
-    int listening = socket(AF_INET, SOCK_STREAM, 0);
-    if (listening == -1)
-    {
-        cerr << "Can't create a socket! Quitting" << endl;
-        return -1;
-    }
- 
-    // Bind the ip address and port to a socket
-    sockaddr_in hint;
-    hint.sin_family = AF_INET;
-    hint.sin_port = htons(54000);
-    inet_pton(AF_INET, "0.0.0.0", &hint.sin_addr);
- 
-    bind(listening, (sockaddr*)&hint, sizeof(hint));
- 
-    // Tell Winsock the socket is for listening
-    listen(listening, SOMAXCONN);
- 
-    // Wait for a connection
-    sockaddr_in client;
-    socklen_t clientSize = sizeof(client);
- 
-    int clientSocket = accept(listening, (sockaddr*)&client, &clientSize);
- 
-    char host[NI_MAXHOST];      // Client's remote name
-    char service[NI_MAXSERV];   // Service (i.e. port) the client is connect on
- 
-    memset(host, 0, NI_MAXHOST); // same as memset(host, 0, NI_MAXHOST);
-    memset(service, 0, NI_MAXSERV);
- 
-    if (getnameinfo((sockaddr*)&client, sizeof(client), host, NI_MAXHOST, service, NI_MAXSERV, 0) == 0)
-    {
-        cout << host << " connected on port " << service << endl;
-    }
-    else
-    {
-        inet_ntop(AF_INET, &client.sin_addr, host, NI_MAXHOST);
-        cout << host << " connected on port " << ntohs(client.sin_port) << endl;
-    }
- 
-    // Close listening socket
-    close(listening);
- 
-    // While loop: accept and echo message back to client
-    char buf[4096];
- 
-    while (true)
-    {
-        memset(buf, 0, 4096);
- 
-        // Wait for client to send data
-        int bytesReceived = recv(clientSocket, buf, 4096, 0);
-        if (bytesReceived == -1)
-        {
-            cerr << "Error in recv(). Quitting" << endl;
-            break;
+
+class Server_socket{
+    fstream file;
+
+    int PORT;
+    
+    int general_socket_descriptor;
+    int new_socket_descriptor;
+
+    struct sockaddr_in address;
+    int address_length;
+
+    public:
+        Server_socket(){
+            create_socket();
+            PORT = 8050;
+
+            address.sin_family = AF_INET; 
+            address.sin_addr.s_addr = INADDR_ANY; 
+            address.sin_port = htons( PORT );
+            address_length = sizeof(address);
+
+            bind_socket();
+            set_listen_set();
+            accept_connection();
+
+            file.open(".//Data//Server//server_text.txt", ios::in | ios::binary);
+            if(file.is_open()){
+                cout<<"[LOG] : File is ready to Transmit.\n";
+            }
+            else{
+                cout<<"[ERROR] : File loading failed, Exititng.\n";
+                exit(EXIT_FAILURE);
+            }
         }
- 
-        if (bytesReceived == 0)
-        {
-            cout << "Client disconnected " << endl;
-            break;
+
+        void create_socket(){
+            if ((general_socket_descriptor = socket(AF_INET, SOCK_STREAM, 0)) == 0) { 
+                perror("[ERROR] : Socket failed");
+                exit(EXIT_FAILURE);
+            }
+            cout<<"[LOG] : Socket Created Successfully.\n";
         }
- 
-        cout << string(buf, 0, bytesReceived) << endl;
- 
-        // Echo message back to client
-        send(clientSocket, buf, bytesReceived + 1, 0);
-    }
- 
-    // Close the socket
-    close(clientSocket);
- 
+
+        void bind_socket(){
+            if (bind(general_socket_descriptor, (struct sockaddr *)&address, sizeof(address))<0) {
+                perror("[ERROR] : Bind failed");
+                exit(EXIT_FAILURE);
+            }
+            cout<<"[LOG] : Bind Successful.\n";
+        }
+
+        void set_listen_set(){
+            if (listen(general_socket_descriptor, 3) < 0) {
+                perror("[ERROR] : Listen");
+                exit(EXIT_FAILURE);
+            }
+            cout<<"[LOG] : Socket in Listen State (Max Connection Queue: 3)\n";
+        }
+
+        void accept_connection(){
+            if ((new_socket_descriptor = accept(general_socket_descriptor, (struct sockaddr *)&address, (socklen_t*)&address_length))<0) { 
+                perror("[ERROR] : Accept");
+                exit(EXIT_FAILURE);
+            }
+            cout<<"[LOG] : Connected to Client.\n";
+        }
+
+        void transmit_file(){
+            std::string contents((std::istreambuf_iterator<char>(file)), std::istreambuf_iterator<char>());
+            cout<<"[LOG] : Transmission Data Size "<<contents.length()<<" Bytes.\n";
+
+            cout<<"[LOG] : Sending...\n";
+
+            int bytes_sent = send(new_socket_descriptor , contents.c_str() , contents.length() , 0 );
+            cout<<"[LOG] : Transmitted Data Size "<<bytes_sent<<" Bytes.\n";
+
+            cout<<"[LOG] : File Transfer Complete.\n";
+        }
+};
+
+int main(){
+    Server_socket S;
+    S.transmit_file();
     return 0;
 }
