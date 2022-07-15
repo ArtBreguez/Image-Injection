@@ -1,77 +1,136 @@
-#include <iostream>
-#include <fstream>
-#include <stdio.h>
-#include <unistd.h>
-#include <sys/socket.h>
-#include <stdlib.h>
-#include <netinet/in.h>
-#include <arpa/inet.h>
-
+#include<stdio.h>
+#include<string.h>
+#include<sys/socket.h>
+#include<arpa/inet.h>   
+#include<sys/ioctl.h>
+#include<unistd.h>  
+#include<iostream>
+#include<fstream>
+#include<errno.h>
 using namespace std;
 
-class Client_socket{
-    fstream file;
+//This function is to be used once we have confirmed that an image is to be sent
+//It should read and output an image file
 
-    int PORT;
-    
-    int general_socket_descriptor;
+int receive_image(int socket)
+{   // Start function 
 
-    struct sockaddr_in address;
-    int address_length;
+    int buffersize = 0, recv_size = 0,size = 0, read_size, write_size, packet_index =1,stat;
 
-    public:
-        Client_socket(){
-            create_socket();
-            PORT = 8050;
+    char imagearray[10241],verify = '1';
+    FILE *image;
 
-            address.sin_family = AF_INET;
-            address.sin_port = htons( PORT );
-            address_length = sizeof(address);
-            if(inet_pton(AF_INET, "127.0.0.1", &address.sin_addr)<=0) { 
-                cout<<"[ERROR] : Invalid address\n";
+    //Find the size of the image
+    do{
+    stat = read(socket, &size, sizeof(int));
+    }while(stat<0);
+
+    printf("Packet received.\n");
+    printf("Packet size: %i\n",stat);
+    printf("Image size: %i\n",size);
+    printf(" \n");
+
+    char buffer[] = "Got it";
+
+    //Send our verification signal
+    do{
+        stat = write(socket, &buffer, sizeof(int));
+    }while(stat<0);
+
+    printf("Reply sent\n");
+    printf(" \n");
+
+    image = fopen("/home/alertrack/teste/TCP-File-Transfer/Data/Client/img.rgba", "w");
+
+    if( image == NULL) {
+        printf("Error has occurred. Image file could not be opened\n");
+    return -1; }
+
+    //Loop while we have not received the entire file yet
+
+
+    int need_exit = 0;
+    struct timeval timeout = {10,0};
+
+    fd_set fds;
+    int buffer_fd, buffer_out;
+
+    while(recv_size < size) {
+
+        FD_ZERO(&fds);
+        FD_SET(socket,&fds);
+
+        buffer_fd = select(FD_SETSIZE,&fds,NULL,NULL,&timeout);
+
+        if (buffer_fd < 0)
+        printf("error: bad file descriptor set.\n");
+
+        if (buffer_fd == 0)
+        printf("error: buffer read timeout expired.\n");
+
+        if (buffer_fd > 0)
+        {
+            do{
+                read_size = read(socket,imagearray, 10241);
+                }while(read_size <0);
+
+            printf("Packet number received: %i\n",packet_index);
+            printf("Packet size: %i\n",read_size);
+
+
+            //Write the currently read data into our image file
+            write_size = fwrite(imagearray,1,read_size, image);
+            printf("Written image size: %i\n",write_size); 
+
+            if(read_size !=write_size) {
+                printf("error in read write\n");
             }
-
-            create_connection();
-            
-            file.open(".//Data//Client//client_text.txt", ios::out | ios::trunc | ios::binary);
-            if(file.is_open()){
-                cout<<"[LOG] : File Creted.\n";
-            }
-            else{
-                cout<<"[ERROR] : File creation failed, Exititng.\n";
-                exit(EXIT_FAILURE);
-            }
+            //Increment the total number of bytes read
+            recv_size += read_size;
+            packet_index++;
+            printf("Total received image size: %i\n",recv_size);
+            printf(" \n");
+            printf(" \n");
         }
 
-        void create_socket(){
-            if ((general_socket_descriptor = socket(AF_INET, SOCK_STREAM, 0)) < 0) { 
-                perror("[ERROR] : Socket failed.\n");
-                exit(EXIT_FAILURE);
-            }
-            cout<<"[LOG] : Socket Created Successfully.\n";
-        }
+    }
+    fclose(image);
+    printf("Image successfully Received!\n");
+    return 1;
+}
+int main(int argc , char *argv[])
+{
 
-        void create_connection(){
-            if (connect(general_socket_descriptor, (struct sockaddr *)&address, sizeof(address)) < 0) { 
-                perror("[ERROR] : connection attempt failed.\n");
-                exit(EXIT_FAILURE);
-            }
-            cout<<"[LOG] : Connection Successfull.\n";
-        }
+    int socket_desc;
+    struct sockaddr_in server;
+    char *parray;
 
-        void receive_file(){
-            char buffer[1024] = {};
-            int valread = read(general_socket_descriptor , buffer, 1024);
-            cout<<"[LOG] : Data received "<<valread<<" bytes\n";
-            cout<<"[LOG] : Saving data to file.\n";
-            
-            file<<buffer;
-            cout<<"[LOG] : File Saved.\n";
-        }
-};
 
-int main(){
-    Client_socket C;
-    C.receive_file();
+    //Create socket
+    socket_desc = socket(AF_INET , SOCK_STREAM , 0);
+
+    if (socket_desc == -1) {
+        printf("Could not create socket");
+    }
+
+    memset(&server,0,sizeof(server));
+    server.sin_addr.s_addr = inet_addr("127.0.0.1");
+    server.sin_family = AF_INET;
+    server.sin_port = htons( 8889 );
+
+    //Connect to remote server
+    if (connect(socket_desc , (struct sockaddr *)&server , sizeof(server)) < 0) {
+    cout<<strerror(errno);
+    close(socket_desc);
+    puts("Connect Error");
+    return 1;
+    }
+
+    puts("Connected\n");
+
+    receive_image(socket_desc);
+
+    close(socket_desc);
+
     return 0;
 }
