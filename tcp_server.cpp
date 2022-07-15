@@ -1,96 +1,130 @@
-#include <iostream>
-#include <fstream>
-#include <stdio.h>
-#include <unistd.h>
-#include <sys/socket.h>
-#include <stdlib.h>
-#include <netinet/in.h>
-#include <arpa/inet.h>
+#include<stdio.h>
+#include<string.h>
+#include<sys/socket.h>
+#include<arpa/inet.h>   
+#include<unistd.h>  
+#include<iostream>
+#include<fstream>
+#include<errno.h>
+#include <Magick++.h>
 
 using namespace std;
+using namespace Magick;
 
-class Server_socket{
-    fstream file;
+int send_image(int socket){
 
-    int PORT;
-    
-    int general_socket_descriptor;
-    int new_socket_descriptor;
+    FILE *picture;
+    int size, read_size, stat, packet_index;
+    char send_buffer[10240], read_buffer[256];
+    packet_index = 1;
 
-    struct sockaddr_in address;
-    int address_length;
+    InitializeMagick(NULL);
+    Magick::Image image;
+    Magick::Image new_image;
+    image.read("/home/alertrack/teste/TCP-File-Transfer/Data/Server/img.png");
+    size_t image_size = image.columns() * image.rows() * 4;
+    uint8_t * pixels = new uint8_t[image_size];
+    image.write(0, 0, image.columns(), image.rows(), "RGBA", ::Magick::CharPixel, pixels);
+    image.write("/home/alertrack/teste/TCP-File-Transfer/Data/Server/new.rgba");
 
-    public:
-        Server_socket(){
-            create_socket();
-            PORT = 8050;
+    picture = fopen("/home/alertrack/teste/TCP-File-Transfer/Data/Server/new.rgba", "r");
+    printf("Getting Picture Size\n");   
 
-            address.sin_family = AF_INET; 
-            address.sin_addr.s_addr = INADDR_ANY; 
-            address.sin_port = htons( PORT );
-            address_length = sizeof(address);
+    if(picture == NULL) {
+        printf("Error Opening Image File"); } 
 
-            bind_socket();
-            set_listen_set();
-            accept_connection();
+    fseek(picture, 0, SEEK_END);
+    size = ftell(picture);
+    fseek(picture, 0, SEEK_SET);
+    printf("Total Picture size: %i\n",size);
 
-            file.open(".//Data//Server//server_text.txt", ios::in | ios::binary);
-            if(file.is_open()){
-                cout<<"[LOG] : File is ready to Transmit.\n";
-            }
-            else{
-                cout<<"[ERROR] : File loading failed, Exititng.\n";
-                exit(EXIT_FAILURE);
-            }
-        }
+    //Send Picture Size
+    printf("Sending Picture Size\n");
+    write(socket, (void *)&size, sizeof(int));
 
-        void create_socket(){
-            if ((general_socket_descriptor = socket(AF_INET, SOCK_STREAM, 0)) == 0) { 
-                perror("[ERROR] : Socket failed");
-                exit(EXIT_FAILURE);
-            }
-            cout<<"[LOG] : Socket Created Successfully.\n";
-        }
+    //Send Picture as Byte Array
+    printf("Sending Picture as Byte Array\n");
 
-        void bind_socket(){
-            if (bind(general_socket_descriptor, (struct sockaddr *)&address, sizeof(address))<0) {
-                perror("[ERROR] : Bind failed");
-                exit(EXIT_FAILURE);
-            }
-            cout<<"[LOG] : Bind Successful.\n";
-        }
+    do { //Read while we get errors that are due to signals.
+        stat=read(socket, &read_buffer , 255);
+        printf("Bytes read: %i\n",stat);
+    } while (stat < 0);
 
-        void set_listen_set(){
-            if (listen(general_socket_descriptor, 3) < 0) {
-                perror("[ERROR] : Listen");
-                exit(EXIT_FAILURE);
-            }
-            cout<<"[LOG] : Socket in Listen State (Max Connection Queue: 3)\n";
-        }
+    printf("Received data in socket\n");
+    printf("Socket data: %c\n", read_buffer);
 
-        void accept_connection(){
-            if ((new_socket_descriptor = accept(general_socket_descriptor, (struct sockaddr *)&address, (socklen_t*)&address_length))<0) { 
-                perror("[ERROR] : Accept");
-                exit(EXIT_FAILURE);
-            }
-            cout<<"[LOG] : Connected to Client.\n";
-        }
+    while(!feof(picture)) {
+    //while(packet_index = 1){
+        //Read from the file into our send buffer
+        read_size = fread(send_buffer, 1, sizeof(send_buffer)-1, picture);
 
-        void transmit_file(){
-            std::string contents((std::istreambuf_iterator<char>(file)), std::istreambuf_iterator<char>());
-            cout<<"[LOG] : Transmission Data Size "<<contents.length()<<" Bytes.\n";
+        //Send data through our socket 
+        do{
+            stat = write(socket, send_buffer, read_size);  
+        }while (stat < 0);
 
-            cout<<"[LOG] : Sending...\n";
+        printf("Packet Number: %i\n",packet_index);
+        printf("Packet Size Sent: %i\n",read_size);     
+        printf(" \n");
+        printf(" \n");
 
-            int bytes_sent = send(new_socket_descriptor , contents.c_str() , contents.length() , 0 );
-            cout<<"[LOG] : Transmitted Data Size "<<bytes_sent<<" Bytes.\n";
 
-            cout<<"[LOG] : File Transfer Complete.\n";
-        }
-};
+        packet_index++;  
 
-int main(){
-    Server_socket S;
-    S.transmit_file();
+        //Zero out our send buffer
+        bzero(send_buffer, sizeof(send_buffer));
+    }
+}
+
+int main(int argc , char *argv[])
+{
+    int socket_desc , new_socket , c, read_size,buffer = 0;
+    struct sockaddr_in server , client;
+    char *readin;
+
+    //Create socket
+    socket_desc = socket(AF_INET , SOCK_STREAM , 0);
+    if (socket_desc == -1)
+    {
+        printf("Could not create socket");
+    }
+
+    //Prepare the sockaddr_in structure
+    server.sin_family = AF_INET;
+    server.sin_addr.s_addr = INADDR_ANY;
+    server.sin_port = htons( 8889 );
+
+    //Bind
+    if( bind(socket_desc,(struct sockaddr *)&server , sizeof(server)) < 0)
+    {
+       puts("bind failed");
+       return 1;
+    }
+
+    puts("bind done");
+
+    //Listen
+    listen(socket_desc , 3);
+
+    //Accept and incoming connection
+    puts("Waiting for incoming connections...");
+    c = sizeof(struct sockaddr_in);
+
+    if((new_socket = accept(socket_desc, (struct sockaddr *)&client,(socklen_t*)&c))){
+    puts("Connection accepted");
+    }
+
+    fflush(stdout);
+
+    if (new_socket<0)
+    {
+      perror("Accept Failed");
+      return 1;
+    }
+
+    send_image(new_socket);
+
+    close(socket_desc);
+    fflush(stdout);
     return 0;
 }
