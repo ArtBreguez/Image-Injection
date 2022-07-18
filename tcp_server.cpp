@@ -15,7 +15,7 @@ void png_to_rgba(){
 
     InitializeMagick(NULL);
     Magick::Image image;
-    image.read("/home/alertrack/teste/TCP-File-Transfer/Data/Server/img.png");
+    image.read("/home/img.png");
     size_t image_size = image.columns() * image.rows() * 4;
     uint8_t * pixels = new uint8_t[image_size];
     image.write(0, 0, image.columns(), image.rows(), "RGBA", ::Magick::CharPixel, pixels);
@@ -30,7 +30,7 @@ int send_image(int socket){
     char send_buffer[10240], read_buffer[256];
     packet_index = 1;
 
-    picture = fopen("/home/alertrack/teste/TCP-File-Transfer/Data/Server/new.rgba", "r");
+    picture = fopen("/home/new.rgba", "rb");
     printf("Getting Picture Size\n");   
 
     if(picture == NULL) {
