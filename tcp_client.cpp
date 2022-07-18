@@ -7,6 +7,8 @@
 #include<iostream>
 #include<fstream>
 #include<errno.h>
+#include<vector>
+
 using namespace std;
 
 //This function is to be used once we have confirmed that an image is to be sent
@@ -40,7 +42,7 @@ int receive_image(int socket)
     printf("Reply sent\n");
     printf(" \n");
 
-    image = fopen("/home/alertrack/teste/TCP-File-Transfer/Data/Client/img.rgba", "w");
+    image = fopen("/storage/emulated/0/Download/img.rgba", "wb");
 
     if( image == NULL) {
         printf("Error has occurred. Image file could not be opened\n");
@@ -132,5 +134,11 @@ int main(int argc , char *argv[])
 
     close(socket_desc);
 
+    std::ifstream input("/storage/emulated/0/Download/img.rgba", std::ios::binary );
+    printf("Copying file to buffer\n");
+    std::vector<unsigned char> buffer(std::istreambuf_iterator<char>(input), {});
+    printf("Buffer size: %i\n", buffer.size());
+
+    printf("Buffer cached\n");
     return 0;
 }
