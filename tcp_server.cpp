@@ -19,7 +19,7 @@ void png_to_rgba(){
     size_t image_size = image.columns() * image.rows() * 4;
     uint8_t * pixels = new uint8_t[image_size];
     image.write(0, 0, image.columns(), image.rows(), "RGBA", ::Magick::CharPixel, pixels);
-    image.write("/home/alertrack/teste/TCP-File-Transfer/Data/Server/new.rgba");
+    image.write("/home/new.rgba");
 
 }
 
