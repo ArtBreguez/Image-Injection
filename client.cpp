@@ -107,8 +107,7 @@ std::vector<unsigned char> loadBuffer()
     std::ifstream input("/home/alertrack/teste/TCP-File-Transfer/Data/Client/img.rgba", std::ios::binary );
     printf("Copying file to buffer\n");
     std::vector<unsigned char> buffer(std::istreambuf_iterator<char>(input), {});
-    printf("Buffer size: %i\n", buffer.size());
-    printf("Buffer cached\n");
+    printf("Buffer cached with size: %i\n", buffer.size());
     return buffer;
 }
 
