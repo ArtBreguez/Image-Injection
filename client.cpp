@@ -145,14 +145,3 @@ int openSocket()
 
     close(socket_desc);
 }
-int main()
-{
-
-    openSocket();
-    
-    std::vector<unsigned char> buffer = loadBuffer();
-
-    printf("Buffer on main size: %i\n", buffer.size());
-    
-    return 0;
-}
