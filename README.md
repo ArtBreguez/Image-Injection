@@ -1,7 +1,7 @@
 # Image-Injection
 Inject image into emulated camera 
 
-# Compile in Linux with g++
+# Compile in Linux with g++ (for test purposes)
 
 Client:
 g++ -c client.cpp -o client.o
